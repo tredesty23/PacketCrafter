@@ -80,8 +80,9 @@ Destination_Address = Default_Source_Address
 Source_Port = Default_Source_Port = 60000 # TODO FIX
 Default_Destination_Port = 80
 
+Port_Range = Default_Port_Range = [0,1000]
 
-
+# for TCP Header checksum computation
 class Pseudo_IPv4_Header:
     def __init__(self, Source_Address, Destination_Address, Reserved, Protocol, TCP_Length):
         self.Source_Address = Source_Address
@@ -284,15 +285,16 @@ class TCP_Header:
             # Default flags for TCP header are 0
             def flag_bit(val):
                 return BitArray(uint=(1 if val else 0), length=1)
-            self.Flags = (flag_bit(CWR)
-                          + flag_bit(ECE)
-                          + flag_bit(URG)
-                          + flag_bit(ACK)
-                          + flag_bit(PSH)
-                          + flag_bit(RST)
-                          + flag_bit(SYN)
-                          + flag_bit(FIN)
-                        )
+            self.Flags = (
+                flag_bit(CWR)
+                + flag_bit(ECE)
+                + flag_bit(URG)
+                + flag_bit(ACK)
+                + flag_bit(PSH)
+                + flag_bit(RST)
+                + flag_bit(SYN)
+                + flag_bit(FIN)
+            )
 
         if Window:
             self.Window = BitArray(uint = Window, length = 16)
@@ -332,9 +334,7 @@ class TCP_Header:
         self.Checksum = final_checksum_val
 
     def to_bitarray(self):
-        offset_reserved = self.Data_Offset + self.Reserved
-        flags_8bits = self.CWR + self.ECE + self.URG + self.ACK + self.PSH + self.RST + self.SYN + self.FIN
-        offset_reserved_flags = offset_reserved + flags_8bits  # 16 bits total
+        offset_reserved_flags = self.Data_Offset + self.Reserved + self.Flags  # 16 bits total
 
         tcp_header = (
             self.Source_Port
@@ -385,7 +385,7 @@ def main():
     scan_type
     ip_args = {}
     tcp_args = {}
-    global port_range
+    global Port_Range
     global Source_Address
     global Destination_Address
     global Source_Port
