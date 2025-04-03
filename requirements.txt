@@ -1,0 +1,2 @@
+bitarray==3.3.0
+bitstring==4.3.1
