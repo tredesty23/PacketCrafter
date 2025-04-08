@@ -5,6 +5,7 @@ import string
 from bitstring import Bits, BitArray
 import math
 import random
+import time
 
 # Regular expressions for IP
 ipv4_regex = re.compile(r'^((25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(25[0-5]|2[0-4]\d|[01]?\d?\d)$')
@@ -177,10 +178,10 @@ class IPv4_Header:
             self.Internet_Header_Length = BitArray(uint = (5 + bit_length // 32), length = 4)
     
     def compute_checksum(self):
-        ip_header_ba = self.to_bitarray
+        ip_header_ba = self.to_bitarray()  # Add parentheses here
         checksum = ones_complement_sum_16bit(ip_header_ba)
         final_checksum = (~checksum) & 0xFFFF
-        self.Header_Checksum.value = final_checksum
+        self.Header_Checksum = BitArray(uint=final_checksum, length=16)  # Use BitArray
 
     def to_bitarray(self):
         # 1. Version (4 bits) + Internet_Header_Length (4 bits) => 8 bits
@@ -328,10 +329,10 @@ class TCP_Header:
 
         psh_ipv4_header = Pseudo_IPv4_Header(Source_Address=Source_Address, Destination_Address=Destination_Address, Reserved = BitArray(uint = 0, length = 4), Protocol = BitArray(uint = 6, length = 8) , TCP_Length=(self.Data_Offset * 4 + len(self.Data)))
         buffer = psh_ipv4_header.to_bitarray() + self.to_bitarray_with_data()
-
         checksum_val = ones_complement_sum_16bit(buffer)
         final_checksum_val = (~checksum_val) & 0xFFFF
-        self.Checksum = final_checksum_val
+        
+        self.Checksum = BitArray(uint=final_checksum_val, length=16)
 
     def to_bitarray(self):
         offset_reserved_flags = self.Data_Offset + self.Reserved + self.Flags  # 16 bits total
@@ -376,8 +377,8 @@ def send_raw_packet(packet_bytes):
     sock.close()
 
 # TODO make scanner functions
-def SYN_Scan(packet, port_range):
-    for i in range(port_range[0], port_range[1]):
+def SYN_Scan(packet, Port_Range):
+    for i in range(Port_Range[0], Port_Range[1]):
         # TODO send packets
         return 1
 
@@ -396,7 +397,7 @@ def main():
             arg = sys.argv[i]
             value = sys.argv[i + 1] if i + 1 < len(sys.argv) else None
 
-            # isisisisisisisisisis SCAN TYPE isisisisisisisisisis
+            # isisisisisisisisisisisis SCAN TYPE isisisisisisisisisisisis
 
             if arg is "-sS":
                 scan_type = "SYN"
@@ -408,7 +409,7 @@ def main():
                 else:
                     raise Exception("Invalid input")
 
-            # isisisisisisisisisis IP HEADER isisisisisisisisisis
+            # isisisisisisisisisisisis IP HEADER isisisisisisisisisisisis
 
             elif arg is "-IP_Version":
                 if value in ("4", "6"):
@@ -463,6 +464,12 @@ def main():
                     ip_args["Protocol"] = int(value)
                 else:
                     raise Exception("Invalid input")
+                
+            elif arg is "-IPv4_Checksum":
+                if value.isdigit() and 0 <= int(value) <= 65535:
+                    tcp_args["Header_Checksum"] = int(value)
+                else:
+                    raise Exception("Invalid input")
 
             elif arg is "-Source_Address":
                 if ipv4_regex.match(value):
@@ -482,7 +489,7 @@ def main():
                 else:
                     raise Exception("Invalid input")
 
-            # isisisisisisisisisis TCP HEADER isisisisisisisisisis
+            # isisisisisisisisisisisis TCP HEADER isisisisisisisisisisisis
 
             elif arg is "-Source_Port" or arg is "-Destination_Port":
                 if value.isdigit() and 0 <= int(value) <= 65535:
@@ -519,6 +526,12 @@ def main():
                     tcp_args["Window"] = int(value)
                 else:
                     raise Exception("Invalid input")
+                
+            elif arg is "-TCP_Checksum":
+                if value.isdigit() and 0 <= int(value) <= 65535:
+                    tcp_args["Window"] = int(value)
+                else:
+                    raise Exception("Invalid input")
 
             elif arg is "-Urgent_Pointer":
                 if value.isdigit() and 0 <= int(value) <= 65535:
@@ -545,10 +558,10 @@ def main():
                             Identification                     = ip_args.get("ID", None),
                             Time_To_Live                       = ip_args.get("Time_To_Live", None),
                             Protocol                           = ip_args.get("Protocol", None),
-                            Header_Checksum                    = None,  # will compute later
+                            Header_Checksum                    = ip_args.get("Header_Checksum", None),
                             Source_Address                     = Source_Address,
                             Destination_Address                = Destination_Address,
-                            Options                            = ip_args.get("IP_Header_Options", None),
+                            Options                            = ip_args.get("IP_Header_Options", None)
                         )
 
     # Create the TCP_Header object
@@ -567,14 +580,15 @@ def main():
                             SYN             = tcp_args.get("SYN", None),
                             FIN             = tcp_args.get("FIN", None),
                             Window          = tcp_args.get("Window", None),
+                            Checksum        = tcp_args.get("Checksum", None),
                             Urgent_Pointer  = tcp_args.get("Urgent_Pointer", None),
                             Options         = tcp_args.get("TCP_Header_Options", None),
-                            Data            = None   # If you have data or payload
+                            Data            = None # If you have data or payload
                         )
 
     # Create socket
     sock_recv = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-
+    
     if tcp_args["Source_Port"] is None:
         sock_recv.bind(("0.0.0.0", 0))  # Listen for all inbound TCP on this machine
         Source_Address = socket.gethostbyname(socket.gethostname())
@@ -582,14 +596,45 @@ def main():
     else:
         sock_recv.bind(("0.0.0.0", tcp_args["Source_Port"]))
 
+    # Create raw socket for sending
+    sock_send = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+    sock_send.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
     # Generate Packet
-    tcp_header.compute_checksum()
+    tcp_header.compute_checksum(Destination_Address = Destination_Address)
     ipv4_header.compute_checksum()
-    packet = ipv4_header + tcp_header
+    packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
 
-    # send_raw_packet(packet.tobytes())
+    # Send packet and listen for responses
+    received_packets = []
+    timeout = 5  # seconds to wait for responses
+    sock_recv.settimeout(timeout)
+    
+    try:
+        # Send the packet
+        sock_send.sendto(packet.tobytes(), (socket.inet_ntoa(Destination_Address.to_bytes(4, 'big')), 0))
+        
+        # Listen for responses
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                packet_data, addr = sock_recv.recvfrom(65535)
+                if addr[0] == Destination_Address:  # Only store packets from our target
+                    received_packets.append({
+                        'timestamp': time.time(),
+                        'source_ip': addr[0],
+                        'source_port': addr[1],
+                        'data': packet_data,
+                        'length': len(packet_data)
+                    })
+            except socket.timeout:
+                continue
+    
+    finally:
+        sock_send.close()
+        sock_recv.close()
 
-    # Listen for response
-    while True:
-        packet, addr = sock_recv.recvfrom(65535)
-        print("Got packet from", addr,"len:", len(packet))
+    # Print received packets
+    print(f"Received {len(received_packets)} packets:")
+    for i, pkt in enumerate(received_packets):
+        print(f"Packet {i+1}: From {pkt['source_ip']}:{pkt['source_port']} - {pkt['length']} bytes")
