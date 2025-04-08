@@ -353,35 +353,6 @@ class TCP_Header:
     def to_bitarray_with_data(self):
         return self.to_bitarray() + self.Data
 
-
-def send_raw_packet(packet_bytes):
-    """
-    Send manually crafted IPv4 + TCP packet via raw socket.
-    packet_bytes: The raw, fully constructed packet (IP header + TCP header + data).
-    dest_ip:      Destination IP string, e.g. '192.168.1.10'.
-    
-    Note: Requires root privileges on most systems.
-    """
-    # Create a raw socket. IPPROTO_RAW on some systems, IPPROTO_TCP on others.
-    # AF_INET = IPv4
-    # SOCK_RAW  = raw socket
-    # IPPROTO_RAW or IPPROTO_TCP can vary based on OS.
-    sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
-
-    # Tell the kernel we’ve built the IP header ourselves (include “IP_HDRINCL”)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-    
-    # Send the packet. The destination address is required here;
-    # the zero port in sendto() is typically ignored for raw sockets.
-    sock.sendto(packet_bytes, (Destination_Address, 0))
-    sock.close()
-
-# TODO make scanner functions
-def SYN_Scan(packet, Port_Range):
-    for i in range(Port_Range[0], Port_Range[1]):
-        # TODO send packets
-        return 1
-
 def main():
     scan_type
     ip_args = {}
