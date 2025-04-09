@@ -142,8 +142,8 @@ class IPv4_Header:
         self.Header_Checksum = BitArray(uint = 0, length = 16)
         self.Source_Address = BitArray(uint = Default_Source_Address, length = 32)
         self.Destination_Address = Default_Source_Address
-        self.Options = BitArray()
-        self.Total_Length = BitArray(uint = (self.Internet_Header_Length.value * 4 + TCP_Header_Length), length = 16)
+        self.Options = BitArray(0)
+        self.Total_Length = BitArray(uint = (self.Internet_Header_Length.uint * 4 + TCP_Header_Length), length = 16)
 
         # Set fields with user configuration
         if Differentiated_Services_Code_Point:
@@ -256,8 +256,8 @@ class TCP_Header:
         self.Window = BitArray(uint = 65535, length = 16)
         self.Checksum = BitArray(uint = 0, length = 16)
         self.Urgent_Pointer = BitArray(uint = 0, length = 16)
-        self.Options = BitArray()
-        self.Data = BitArray()
+        self.Options = BitArray(0)
+        self.Data = BitArray(0)
 
         # Set fields with user configuration
         if Source_Port:
@@ -313,21 +313,32 @@ class TCP_Header:
             self.Options = BitArray(uint = Options, length = bit_length)
             self.Data_Offset = BitArray(uint = (5 + (bit_length // 32)), length = 4)
         
-        if Data is None:
+        if Data:
             self.Data = BitArray(uint = Data, length = Data.bit_length())
 
         self.compute_checksum()
+
+        # This will be used to store the length of the tcp header + data
+        # Default is minimum tcp header size 
+        self.TCP_Header_Length = len(self.to_bitarray_with_data())
         
-    def compute_checksum(self, Destination_Address):
-        sum = 0
+    def compute_checksum(self):
+
+        global Destination_Address
+        global Source_Address
 
         if isinstance(Source_Address, int):
-            Source_Address = BitArray(uint = ip_to_int(Source_Address), length = 32)
+            src_addr = BitArray(uint = ip_to_int(Source_Address), length = 32)
 
         if isinstance(Destination_Address, int):
-            Destination_Address = BitArray(uint = ip_to_int(Destination_Address), length=32)
+            dst_addr = BitArray(uint = ip_to_int(Destination_Address), length=32)
 
-        psh_ipv4_header = Pseudo_IPv4_Header(Source_Address=Source_Address, Destination_Address=Destination_Address, Reserved = BitArray(uint = 0, length = 4), Protocol = BitArray(uint = 6, length = 8) , TCP_Length=(self.Data_Offset * 4 + len(self.Data)))
+        psh_ipv4_header = Pseudo_IPv4_Header(Source_Address=src_addr,
+                                            Destination_Address=dst_addr,
+                                            Reserved = BitArray(uint = 0, length = 4),
+                                            Protocol = BitArray(uint = 6, length = 8),
+                                            TCP_Length = BitArray(uint = (self.Data_Offset.uint * 4 + len(self.Data)), length = 16)
+                                        )
         buffer = psh_ipv4_header.to_bitarray() + self.to_bitarray_with_data()
         checksum_val = ones_complement_sum_16bit(buffer)
         final_checksum_val = (~checksum_val) & 0xFFFF
@@ -335,14 +346,15 @@ class TCP_Header:
         self.Checksum = BitArray(uint=final_checksum_val, length=16)
 
     def to_bitarray(self):
-        offset_reserved_flags = self.Data_Offset + self.Reserved + self.Flags  # 16 bits total
 
         tcp_header = (
             self.Source_Port
             + self.Destination_Port
             + self.Sequence_Number
             + self.ACK_Number
-            + offset_reserved_flags
+            + self.Data_Offset
+            + self.Reserved
+            + self.Flags
             + self.Window
             + self.Checksum
             + self.Urgent_Pointer
@@ -354,7 +366,6 @@ class TCP_Header:
         return self.to_bitarray() + self.Data
 
 def main():
-    scan_type
     ip_args = {}
     tcp_args = {}
     global Port_Range
@@ -363,177 +374,171 @@ def main():
     global Source_Port
 
     i = 1
+
     try:
+        if len(sys.argv) == 1:
+            raise Exception("Invalid input, no arguments used")
+
         while i < len(sys.argv):
             arg = sys.argv[i]
             value = sys.argv[i + 1] if i + 1 < len(sys.argv) else None
 
-            # isisisisisisisisisisisis SCAN TYPE isisisisisisisisisisisis
+            # ____________________ SCAN TYPE ____________________
 
-            if arg is "-sS":
+            if arg == "-sS":
                 scan_type = "SYN"
-            elif arg is "-sT":
+            elif arg == "-sT":
                 scan_type = "TCP"
-            elif arg is "-p":
+            elif arg == "-p":
                 if(re.match(r"^(-?\d+)-(-?\d+)$", arg)):
                     port_range = int(arg.split("-"))
                 else:
                     raise Exception("Invalid input")
 
-            # isisisisisisisisisisisis IP HEADER isisisisisisisisisisisis
+            # ____________________ IP HEADER ____________________
 
-            elif arg is "-IP_Version":
+            elif arg == "-IP_Version":
                 if value in ("4", "6"):
                     ip_args["IP_Version"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Internet_Header_Length":
+            elif arg == "-Internet_Header_Length":
                 if value.isdigit() and 5 <= int(value) <= 15:
                     ip_args["Internet_Header_Length"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Differentiated_Services_Code_Point":
+            elif arg == "-Differentiated_Services_Code_Point":
                 if value.isdigit() and 0 <= int(value) <= 63:
                     ip_args["Differentiated_Services_Code_Point"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Explicit_Congestion_Notification":
+            elif arg == "-Explicit_Congestion_Notification":
                 if value.isdigit() and 0 <= int(value) <= 3:
                     ip_args["Explicit_Congestion_Notification"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Total_Length":
+            elif arg == "-Total_Length":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     ip_args["Total_Length"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-ID":
+            elif arg == "-ID":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     ip_args["ID"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Flags":
+            elif arg == "-Flags":
                 if value.startswith("0b") and len(value) <= 5:
                     ip_args["Flags"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Fragment_Offset":
+            elif arg == "-Fragment_Offset":
                 if value.isdigit() and 0 <= int(value) <= 8191:
                     ip_args["Fragment_Offset"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Protocol":
+            elif arg == "-Protocol":
                 if value.isdigit() and 0 <= int(value) <= 255:
                     ip_args["Protocol"] = int(value)
                 else:
                     raise Exception("Invalid input")
                 
-            elif arg is "-IPv4_Checksum":
+            elif arg == "-IPv4_Checksum":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     tcp_args["Header_Checksum"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Source_Address":
+            elif arg == "-Source_Address":
                 if ipv4_regex.match(value):
                     Source_Address = ip_to_int(value)
                 else:
                     raise Exception("Invalid input")
                 
-            elif arg is "-Destination_Address":
+            elif arg == "-Destination_Address":
                 if ipv4_regex.match(value):
                     Destination_Address = ip_to_int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-IP_Header_Options":
-                if len(value) % 8 is 0:
+            elif arg == "-IP_Header_Options":
+                if len(value) % 8 == 0:
                     ip_args["IP_Header_Options"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            # isisisisisisisisisisisis TCP HEADER isisisisisisisisisisisis
+            # ____________________ TCP HEADER ____________________
 
-            elif arg is "-Source_Port" or arg is "-Destination_Port":
+            elif arg == "-Source_Port" or arg == "-Destination_Port":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     tcp_args[arg.strip("-")] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Sequence_Number" or arg is "-ACK_Number":
+            elif arg == "-Sequence_Number" or arg == "-ACK_Number":
                 if value.isdigit() and 0 <= int(value) <= 0xFFFFFFFF:
                     tcp_args[arg.strip("-")] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Data_Offset":
+            elif arg == "-Data_Offset":
                 if value.isdigit() and 5 <= int(value) <= 15:
                     tcp_args["Data_Offset"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Reserved":
+            elif arg == "-Reserved":
                 if value.isdigit() and 0 <= int(value) <= 7:
                     tcp_args["Reserved"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg in ("-CWR", "-ECE", "-URG", "-ACK", "-PSH", "-RST", "-SYN", "-FIN"):
+            elif arg == ("-CWR", "-ECE", "-URG", "-ACK", "-PSH", "-RST", "-SYN", "-FIN"):
                 if value in ("0", "1"):
                     tcp_args[arg.strip("-")] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Window":
+            elif arg == "-Window":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     tcp_args["Window"] = int(value)
                 else:
                     raise Exception("Invalid input")
                 
-            elif arg is "-TCP_Checksum":
+            elif arg == "-TCP_Checksum":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     tcp_args["Window"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-Urgent_Pointer":
+            elif arg == "-Urgent_Pointer":
                 if value.isdigit() and 0 <= int(value) <= 65535:
                     tcp_args["Urgent_Pointer"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
-            elif arg is "-TCP_Header_Options":
-                if len(value) % 8 is 0:
+            elif arg == "-TCP_Header_Options":
+                if (len(value) % 8) == 0:
                     tcp_args["TCP_Header_Options"] = int(value)
                 else:
                     raise Exception("Invalid input")        
-            elif arg is "-TCP_Data":
+            elif arg == "-TCP_Data":
                 tcp_args["Data"] = value
+            else:
+                raise Exception("Invalid input")
+
             i += 2
     except Exception as e:
         print(f"Error: {e}")
         exit(1)
-    
-    # Create the IPv4_Header object
-    ipv4_header = IPv4_Header(
-                            Differentiated_Services_Code_Point = ip_args.get("Differentiated_Services_Code_Point", None),
-                            Explicit_Congestion_Notification   = ip_args.get("Explicit_Congestion_Notification", None),
-                            Identification                     = ip_args.get("ID", None),
-                            Time_To_Live                       = ip_args.get("Time_To_Live", None),
-                            Protocol                           = ip_args.get("Protocol", None),
-                            Header_Checksum                    = ip_args.get("Header_Checksum", None),
-                            Source_Address                     = Source_Address,
-                            Destination_Address                = Destination_Address,
-                            Options                            = ip_args.get("IP_Header_Options", None)
-                        )
 
     # Create the TCP_Header object
     tcp_header = TCP_Header(
@@ -555,6 +560,20 @@ def main():
                             Urgent_Pointer  = tcp_args.get("Urgent_Pointer", None),
                             Options         = tcp_args.get("TCP_Header_Options", None),
                             Data            = None # If you have data or payload
+                        )
+    
+    # Create the IPv4_Header object
+    ipv4_header = IPv4_Header(
+                            Differentiated_Services_Code_Point = ip_args.get("Differentiated_Services_Code_Point", None),
+                            Explicit_Congestion_Notification   = ip_args.get("Explicit_Congestion_Notification", None),
+                            Identification                     = ip_args.get("ID", None),
+                            Time_To_Live                       = ip_args.get("Time_To_Live", None),
+                            Protocol                           = ip_args.get("Protocol", None),
+                            Header_Checksum                    = ip_args.get("Header_Checksum", None),
+                            Source_Address                     = Source_Address,
+                            Destination_Address                = Destination_Address,
+                            Options                            = ip_args.get("IP_Header_Options", None),
+                            TCP_Header_Length                  = tcp_header.TCP_Header_Length
                         )
 
     # Create socket
@@ -609,3 +628,5 @@ def main():
     print(f"Received {len(received_packets)} packets:")
     for i, pkt in enumerate(received_packets):
         print(f"Packet {i+1}: From {pkt['source_ip']}:{pkt['source_port']} - {pkt['length']} bytes")
+
+main()
