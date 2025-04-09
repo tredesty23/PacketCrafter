@@ -4,8 +4,252 @@ import re
 import string
 from bitstring import Bits, BitArray
 import math
+import struct
+import ipaddress
 import random
 import time
+
+
+# This test is gpt generated
+def sanity_check_packet(ipv4_header: BitArray, tcp_header: BitArray) -> bool:
+    packet_bytes = ipv4_header + tcp_header
+    raw = packet_bytes.tobytes()
+
+    # Basic length check
+    if len(raw) < 40:
+        print("❌ Packet too short. Should be at least 40 bytes (20 IP + 20 TCP).")
+        return False
+
+    # Extract IP version and header length
+    version_ihl = raw[0]
+    version = version_ihl >> 4
+    ihl = version_ihl & 0x0F
+    ip_header_length = ihl * 4
+
+    if version != 4:
+        print(f"❌ Invalid IP version: {version} (expected 4).")
+        return False
+
+    if ihl < 5:
+        print(f"❌ IP Header Length too short: {ihl} (should be ≥ 5).")
+        return False
+
+    # Validate total length field
+    total_length = struct.unpack("!H", raw[2:4])[0]
+    if total_length != len(raw):
+        print(f"⚠️ IP Total Length field = {total_length}, but actual = {len(raw)}.")
+
+    # Validate IP addresses
+    src_ip = socket.inet_ntoa(raw[12:16])
+    dst_ip = socket.inet_ntoa(raw[16:20])
+    try:
+        ipaddress.ip_address(src_ip)
+        ipaddress.ip_address(dst_ip)
+    except ValueError:
+        print(f"❌ Invalid IP addresses: src={src_ip}, dst={dst_ip}.")
+        return False
+
+    # Validate TCP source/destination ports
+    try:
+        src_port, dst_port = struct.unpack("!HH", raw[ip_header_length:ip_header_length + 4])
+        if not (0 <= src_port <= 65535) or not (0 <= dst_port <= 65535):
+            print(f"❌ Invalid TCP port values: src={src_port}, dst={dst_port}.")
+            return False
+    except struct.error:
+        print("❌ TCP header too short or corrupted.")
+        return False
+
+    print("✅ Packet sanity check passed.")
+    return True
+
+# gpt generated prints
+def print_packet_details(packet: BitArray):
+    """
+    Parse and print the detailed IPv4 and TCP header fields from a full packet.
+    
+    Parameters:
+      packet: BitArray containing the full IPv4 packet (header + payload).
+    """
+    # Convert the BitArray to bytes.
+    raw = packet.tobytes()
+    
+    # --- Parse IPv4 Header ---
+    # Byte 0: Version and IHL.
+    version_ihl = raw[0]
+    version = version_ihl >> 4
+    ihl = version_ihl & 0x0F
+    ip_header_length = ihl * 4  # in bytes
+
+    # Byte 1: DSCP and ECN (not split here but printed as one byte)
+    dscp_ecn = raw[1]
+    # Bytes 2-3: Total Length
+    total_length = struct.unpack("!H", raw[2:4])[0]
+    # Bytes 4-5: Identification
+    identification = struct.unpack("!H", raw[4:6])[0]
+    # Bytes 6-7: Flags (3 bits) and Fragment Offset (13 bits)
+    flags_fragment = struct.unpack("!H", raw[6:8])[0]
+    flags = flags_fragment >> 13
+    fragment_offset = flags_fragment & 0x1FFF
+    # Byte 8: Time To Live (TTL)
+    ttl = raw[8]
+    # Byte 9: Protocol
+    protocol = raw[9]
+    # Bytes 10-11: Header Checksum
+    header_checksum = struct.unpack("!H", raw[10:12])[0]
+    # Bytes 12-15: Source IP
+    src_ip = socket.inet_ntoa(raw[12:16])
+    # Bytes 16-19: Destination IP
+    dst_ip = socket.inet_ntoa(raw[16:20])
+    
+    # Options: if IHL > 5
+    if ihl > 5:
+        options = raw[20:ip_header_length]
+    else:
+        options = None
+
+    # --- Print IPv4 Header Details ---
+    print("=====================================")
+    print("           IPv4 HEADER")
+    print("=====================================")
+    print("IP Version:                   ", version)
+    print("Internet Header Length:       ", ip_header_length, "bytes")
+    print("DSCP + ECN:                   ", format(dscp_ecn, "08b"))
+    print("Total Length:                 ", total_length, "bytes")
+    print("Identification:               ", identification)
+    print("Flags:                        ", format(flags, "03b"))
+    print("Fragment Offset:              ", fragment_offset)
+    print("Time To Live (TTL):           ", ttl)
+    print("Protocol:                     ", protocol)
+    print("Header Checksum:              ", hex(header_checksum))
+    print("Source Address:               ", src_ip)
+    print("Destination Address:          ", dst_ip)
+    if options:
+        print("Options:                      ", options.hex())
+    else:
+        print("Options:                      (none)")
+    
+    # --- Parse TCP Header ---
+    # The TCP header starts at offset = ip_header_length.
+    tcp_offset = ip_header_length
+
+    # Bytes tcp_offset to tcp_offset+2: Source Port.
+    src_port = struct.unpack("!H", raw[tcp_offset:tcp_offset+2])[0]
+    # Bytes tcp_offset+2 to tcp_offset+4: Destination Port.
+    dst_port = struct.unpack("!H", raw[tcp_offset+2:tcp_offset+4])[0]
+    # Bytes tcp_offset+4 to tcp_offset+8: Sequence Number.
+    sequence_number = struct.unpack("!I", raw[tcp_offset+4:tcp_offset+8])[0]
+    # Bytes tcp_offset+8 to tcp_offset+12: Acknowledgment Number.
+    ack_number = struct.unpack("!I", raw[tcp_offset+8:tcp_offset+12])[0]
+    # Byte tcp_offset+12: Data Offset (upper 4 bits) and Reserved (lower 4 bits).
+    data_offset_reserved = raw[tcp_offset+12]
+    data_offset = data_offset_reserved >> 4  # in 32-bit words
+    tcp_header_length = data_offset * 4       # in bytes
+    # Byte tcp_offset+13: TCP Flags.
+    tcp_flags = raw[tcp_offset+13]
+    # Bytes tcp_offset+14 to tcp_offset+16: Window Size.
+    window = struct.unpack("!H", raw[tcp_offset+14:tcp_offset+16])[0]
+    # Bytes tcp_offset+16 to tcp_offset+18: Checksum.
+    tcp_checksum = struct.unpack("!H", raw[tcp_offset+16:tcp_offset+18])[0]
+    # Bytes tcp_offset+18 to tcp_offset+20: Urgent Pointer.
+    urgent_pointer = struct.unpack("!H", raw[tcp_offset+18:tcp_offset+20])[0]
+
+    # Options: if TCP header length > 20 bytes.
+    if tcp_header_length > 20:
+        tcp_options = raw[tcp_offset+20:tcp_offset+tcp_header_length]
+    else:
+        tcp_options = None
+    
+    # TCP Data: remainder of the packet after the TCP header.
+    tcp_data = raw[tcp_offset+tcp_header_length:]
+    
+    # --- Print TCP Header Details ---
+    print("\n=====================================")
+    print("              TCP HEADER")
+    print("=====================================")
+    print("Source Port:                  ", src_port)
+    print("Destination Port:             ", dst_port)
+    print("Sequence Number:              ", sequence_number)
+    print("Acknowledgment Number:        ", ack_number)
+    print("Data Offset:                  ", tcp_header_length, "bytes")
+    # Print flags as an 8-bit binary string.
+    print("Flags:                        ", format(tcp_flags, "08b"))
+    print("Window:                       ", window)
+    print("Checksum:                     ", hex(tcp_checksum))
+    print("Urgent Pointer:               ", urgent_pointer)
+    if tcp_options:
+        print("Options:                      ", tcp_options.hex())
+    else:
+        print("Options:                      (none)")
+    if tcp_data:
+        print("Data:                         ", tcp_data.hex())
+    else:
+        print("Data:                         (none)")
+    print("=====================================\n")
+    print("Packet: ", packet,"\n")
+
+def print_header_details(ip_header, tcp_header):
+    """
+    Print detailed fields of an IPv4 header and a TCP header.
+    
+    Parameters:
+      ip_header: An instance of IPv4_Header.
+      tcp_header: An instance of TCP_Header.
+    """
+    print("=====================================")
+    print("           IPv4 HEADER")
+    print("=====================================")
+    print("IP Version:                   ", ip_header.IP_Version.uint)
+    # IHL is in 32-bit words; multiply by 4 for bytes.
+    print("Internet Header Length:       ", ip_header.Internet_Header_Length.uint * 4, "bytes")
+    print("Differentiated Services (DSCP):", ip_header.Differentiated_Services_Code_Point.uint)
+    print("Explicit Congestion Notif (ECN):", ip_header.Explicit_Congestion_Notification.uint)
+    print("Total Length:                 ", ip_header.Total_Length.uint, "bytes")
+    print("Identification:               ", ip_header.Identification.uint)
+    print("Flags:                        ", ip_header.Flags.bin)
+    print("Fragment Offset:              ", ip_header.Fragment_Offset.uint)
+    print("Time To Live (TTL):           ", ip_header.Time_To_Live.uint)
+    print("Protocol:                     ", ip_header.Protocol.uint)
+    print("Header Checksum:              ", hex(ip_header.Header_Checksum.uint))
+    
+    # Convert the 32-bit BitArrays to an IP string using socket.inet_ntoa()
+    src_ip = socket.inet_ntoa(ip_header.Source_Address.tobytes())
+    dst_ip = socket.inet_ntoa(ip_header.Destination_Address.tobytes())
+    print("Source Address:               ", src_ip)
+    print("Destination Address:          ", dst_ip)
+    
+    # Options may be empty; if not, print binary string.
+    if ip_header.Options.length > 0:
+        print("Options:                      ", ip_header.Options.bin)
+    else:
+        print("Options:                      (none)")
+    
+    print("\n=====================================")
+    print("              TCP HEADER")
+    print("=====================================")
+    print("Source Port:                  ", tcp_header.Source_Port.uint)
+    print("Destination Port:             ", tcp_header.Destination_Port.uint)
+    print("Sequence Number:              ", tcp_header.Sequence_Number.uint)
+    print("ACK Number:                   ", tcp_header.ACK_Number.uint)
+    # TCP Data_Offset is in 32-bit words; multiply by 4 for bytes.
+    print("Data Offset:                  ", tcp_header.Data_Offset.uint * 4, "bytes")
+    print("Reserved:                     ", tcp_header.Reserved.uint)
+    print("Flags:                        ", tcp_header.Flags.bin)
+    print("Window:                       ", tcp_header.Window.uint)
+    print("Checksum:                     ", hex(tcp_header.Checksum.uint))
+    print("Urgent Pointer:               ", tcp_header.Urgent_Pointer.uint)
+    
+    if tcp_header.Options.length > 0:
+        print("Options:                      ", tcp_header.Options.bin)
+    else:
+        print("Options:                      (none)")
+        
+    if tcp_header.Data.length > 0:
+        print("Data:                         ", tcp_header.Data.bin)
+    else:
+        print("Data:                         (none)")
+    
+    print("=====================================\n")
+    print("Packet: ", ip_header.to_bitarray() + tcp_header.to_bitarray_with_data(), "\n")
 
 # Regular expressions for IP
 ipv4_regex = re.compile(r'^((25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(25[0-5]|2[0-4]\d|[01]?\d?\d)$')
@@ -72,14 +316,28 @@ def ones_complement_sum_16bit(bit_arr):
 
 # TODO fix
 # Takes IP of current device and transforms it to a value for filling IPv4 Header BitArray
-Source_Address = Default_Source_Address = ip_to_int("192.168.1.1")
+
+global Default_Source_Address
+global Default_Destination_Address
+global Default_Source_Port
+global Default_Destination_Port
+
+global Source_Address
+global Destination_Address
+global Source_Port
+global Destination_Port
+
+global Port_Range
+
+
+Source_Address = Default_Source_Address = "192.168.1.1"
 
 # Default is the source, will be replaced manually
-Destination_Address = Default_Source_Address
+Destination_Address = Default_Destination_Address = "192.168.1.1"
 
 # Takes free port which was open for the connection from the source computer 
-Source_Port = Default_Source_Port = 60000 # TODO FIX
-Default_Destination_Port = 80
+Source_Port = Default_Source_Port = 12345 # TODO FIX
+Destination_Port = Default_Destination_Port = 80
 
 Port_Range = Default_Port_Range = [0,1000]
 
@@ -127,8 +385,8 @@ class IPv4_Header:
                 Header_Checksum,
                 Source_Address,
                 Destination_Address,
-                Options,
-                TCP_Header_Length):
+                Options
+                ):
 
         self.IP_Version = BitArray(uint = 4, length = 4)
         self.Internet_Header_Length = BitArray(uint = 5, length = 4)
@@ -140,10 +398,10 @@ class IPv4_Header:
         self.Time_To_Live = BitArray(uint = 64, length = 8)
         self.Protocol = BitArray(uint = 6, length = 8)
         self.Header_Checksum = BitArray(uint = 0, length = 16)
-        self.Source_Address = BitArray(uint = Default_Source_Address, length = 32)
-        self.Destination_Address = Default_Source_Address
+        self.Source_Address = BitArray(uint = ip_to_int(Default_Source_Address), length = 32)
+        self.Destination_Address = BitArray(uint = ip_to_int(Default_Destination_Address), length = 32)
         self.Options = BitArray(0)
-        self.Total_Length = BitArray(uint = (self.Internet_Header_Length.uint * 4 + TCP_Header_Length), length = 16)
+        self.Total_Length = BitArray(uint = 0, length = 16) # will be updated
 
         # Set fields with user configuration
         if Differentiated_Services_Code_Point:
@@ -165,10 +423,10 @@ class IPv4_Header:
             self.Header_Checksum = BitArray(uint = Header_Checksum, length = 16)
 
         if Source_Address:
-            self.Source_Address = BitArray(uint = Source_Address, length = 32)
+            self.Source_Address = BitArray(uint = ip_to_int(Source_Address), length = 32)
 
         if Destination_Address:
-            self.Destination_Address = BitArray(uint = Destination_Address, length = 32)
+            self.Destination_Address = BitArray(uint = ip_to_int(Destination_Address), length = 32)
 
         if Options:
             bit_length = Options.bit_length()
@@ -182,6 +440,11 @@ class IPv4_Header:
         checksum = ones_complement_sum_16bit(ip_header_ba)
         final_checksum = (~checksum) & 0xFFFF
         self.Header_Checksum = BitArray(uint=final_checksum, length=16)  # Use BitArray
+
+    def update_total_length(self, tcp_bitarray_with_data: BitArray):
+        tcp_length = len(tcp_bitarray_with_data.tobytes()) # in bytes
+        ip_length = self.Internet_Header_Length.uint * 4 # typically 20 bytes
+        self.Total_Length = BitArray(uint=(ip_length + tcp_length), length=16)
 
     def to_bitarray(self):
         # 1. Version (4 bits) + Internet_Header_Length (4 bits) => 8 bits
@@ -320,18 +583,16 @@ class TCP_Header:
 
         # This will be used to store the length of the tcp header + data
         # Default is minimum tcp header size 
-        self.TCP_Header_Length = len(self.to_bitarray_with_data())
+        self.TCP_Header_Length = len(self.to_bitarray_with_data().tobytes())
         
     def compute_checksum(self):
 
         global Destination_Address
         global Source_Address
 
-        if isinstance(Source_Address, int):
-            src_addr = BitArray(uint = ip_to_int(Source_Address), length = 32)
+        src_addr = BitArray(uint = ip_to_int(Source_Address), length = 32)
 
-        if isinstance(Destination_Address, int):
-            dst_addr = BitArray(uint = ip_to_int(Destination_Address), length=32)
+        dst_addr = BitArray(uint = ip_to_int(Destination_Address), length=32)
 
         psh_ipv4_header = Pseudo_IPv4_Header(Source_Address=src_addr,
                                             Destination_Address=dst_addr,
@@ -372,6 +633,7 @@ def main():
     global Source_Address
     global Destination_Address
     global Source_Port
+    global Destination_Port
 
     i = 1
 
@@ -477,9 +739,15 @@ def main():
 
             # ____________________ TCP HEADER ____________________
 
-            elif arg == "-Source_Port" or arg == "-Destination_Port":
+            elif arg == "-Source_Port":
                 if value.isdigit() and 0 <= int(value) <= 65535:
-                    tcp_args[arg.strip("-")] = int(value)
+                    Source_Port = int(value)
+                else:
+                    raise Exception("Invalid input")
+                
+            elif arg == "-Destination_Port":
+                if value.isdigit() and 0 <= int(value) <= 65535:
+                    Destination_Port = int(value)
                 else:
                     raise Exception("Invalid input")
 
@@ -540,10 +808,25 @@ def main():
         print(f"Error: {e}")
         exit(1)
 
+    
+
+    # Create a raw receiving socket for inbound TCP packets
+    sock_recv = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+    sock_recv.bind(("0.0.0.0", Source_Port))  # Bind to listen on all interfaces
+
+    # Get actual source details from the bound socket.
+    # First, get a preliminary source port from sock_recv.
+    Source_Port = sock_recv.getsockname()[1]
+    # Then use a temporary UDP socket to get the external IP address.
+    temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    temp_sock.connect(('8.8.8.8', 80))
+    Source_Address = temp_sock.getsockname()[0]
+    temp_sock.close()
+
     # Create the TCP_Header object
     tcp_header = TCP_Header(
-                            Source_Port     = tcp_args.get("Source_Port", None),
-                            Destination_Port= tcp_args.get("Destination_Port", None),
+                            Source_Port     = Source_Port,
+                            Destination_Port= Destination_Port,
                             Sequence_Number = tcp_args.get("Sequence_Number", None),
                             ACK_Number      = tcp_args.get("ACK_Number", None),
                             Data_Offset     = tcp_args.get("Data_Offset", None),
@@ -573,56 +856,61 @@ def main():
                             Source_Address                     = Source_Address,
                             Destination_Address                = Destination_Address,
                             Options                            = ip_args.get("IP_Header_Options", None),
-                            TCP_Header_Length                  = tcp_header.TCP_Header_Length
                         )
-
-    # Create socket
-    sock_recv = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-    
-    if tcp_args["Source_Port"] is None:
-        sock_recv.bind(("0.0.0.0", 0))  # Listen for all inbound TCP on this machine
-        Source_Address = socket.gethostbyname(socket.gethostname())
-        Source_Port = sock_recv.getsockname()[1]
-    else:
-        sock_recv.bind(("0.0.0.0", tcp_args["Source_Port"]))
-
     # Create raw socket for sending
     sock_send = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     sock_send.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
-    # Generate Packet
-    tcp_header.compute_checksum(Destination_Address = Destination_Address)
-    ipv4_header.compute_checksum()
-    packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
 
-    # Send packet and listen for responses
+    # Prepare headers
+    ipv4_header.update_total_length(tcp_bitarray_with_data = tcp_header.to_bitarray_with_data())
+
+    tcp_header.compute_checksum()
+    ipv4_header.compute_checksum()
+
+    print_header_details(ip_header = ipv4_header, tcp_header = tcp_header)
+    
+    # Send the packet
+    try:
+        if sanity_check_packet(ipv4_header.to_bitarray(), tcp_header.to_bitarray_with_data()):
+            packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
+
+            print_packet_details(packet = packet)
+
+            sent_bytes = sock_send.sendto(packet.tobytes(), (Destination_Address, 0))
+
+            if sent_bytes == 0:
+                raise RuntimeError("❌ Packet send returned 0 bytes (nothing sent)")
+
+            print(f"✅ Packet sent ({sent_bytes} bytes)")
+        else:
+            raise ValueError("❌ Packet sanity check failed")
+    except (OSError, RuntimeError, ValueError) as e:
+        print(f"❌ Failed to send packet: {e}")
+
+
+    # Listen for responses on the raw receiving socket (sock_recv)
     received_packets = []
     timeout = 5  # seconds to wait for responses
     sock_recv.settimeout(timeout)
-    
-    try:
-        # Send the packet
-        sock_send.sendto(packet.tobytes(), (socket.inet_ntoa(Destination_Address.to_bytes(4, 'big')), 0))
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:   
+        try:
+            packet_data, addr = sock_recv.recvfrom(65535)
+            if addr[0] == Destination_Address:  # Only store packets from our target
+                received_packets.append({
+                    'timestamp': time.time(),
+                    'source_ip': addr[0],
+                    'source_port': addr[1],
+                    'data': packet_data,
+                    'length': len(packet_data)
+                })
+        except socket.timeout:
+            continue
         
-        # Listen for responses
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            try:
-                packet_data, addr = sock_recv.recvfrom(65535)
-                if addr[0] == Destination_Address:  # Only store packets from our target
-                    received_packets.append({
-                        'timestamp': time.time(),
-                        'source_ip': addr[0],
-                        'source_port': addr[1],
-                        'data': packet_data,
-                        'length': len(packet_data)
-                    })
-            except socket.timeout:
-                continue
-    
-    finally:
-        sock_send.close()
-        sock_recv.close()
+    sock_send.close()
+    sock_recv.close()
 
     # Print received packets
     print(f"Received {len(received_packets)} packets:")
