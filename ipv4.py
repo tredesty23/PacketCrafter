@@ -49,31 +49,31 @@ class IPv4_Header:
         self.Options = BitArray(0)
 
         # Set fields with user configuration
-        if Differentiated_Services_Code_Point:
+        if Differentiated_Services_Code_Point is not None:
             self.Differentiated_Services_Code_Point = BitArray(uint = Differentiated_Services_Code_Point, length = 6)
 
-        if Explicit_Congestion_Notification:
+        if Explicit_Congestion_Notification is not None:
             self.Explicit_Congestion_Notification = BitArray(uint = Explicit_Congestion_Notification, length = 2)
 
-        if Identification:
+        if Identification is not None:
             self.Identification = BitArray(uint = Identification, length = 16)
 
-        if Time_To_Live:
+        if Time_To_Live is not None:
             self.Time_To_Live = BitArray(uint = Time_To_Live, length = 8)
 
-        if Protocol:
+        if Protocol is not None:
             self.Protocol = BitArray(uint = Protocol, length = 8)
         
-        if Header_Checksum:
+        if Header_Checksum is not None:
             self.Header_Checksum = BitArray(uint = Header_Checksum, length = 16)
 
-        if Source_Address:
+        if Source_Address is not None:
             self.Source_Address = BitArray(uint = ip_to_int(Source_Address), length = 32)
 
-        if Destination_Address:
+        if Destination_Address is not None:
             self.Destination_Address = BitArray(uint = ip_to_int(Destination_Address), length = 32)
 
-        if Options:
+        if Options is not None:
             bit_length = Options.bit_length()
             if bit_length % 32 != 0:
                 bit_length = ((bit_length // 32) + 1) * 32
@@ -81,10 +81,10 @@ class IPv4_Header:
             self.Internet_Header_Length = BitArray(uint = (5 + bit_length // 32), length = 4)
     
     def compute_checksum(self):
-        ip_header_ba = self.to_bitarray()  # Add parentheses here
+        ip_header_ba = self.to_bitarray()
         checksum = ones_complement_sum_16bit(ip_header_ba)
         final_checksum = (~checksum) & 0xFFFF
-        self.Header_Checksum = BitArray(uint=final_checksum, length=16)  # Use BitArray
+        self.Header_Checksum = BitArray(uint = final_checksum, length=16)  # Use BitArray
 
     def update_total_length(self, tcp_length):
         ip_length = self.Internet_Header_Length.uint * 4 # typically 20 bytes

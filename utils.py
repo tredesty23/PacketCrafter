@@ -187,8 +187,8 @@ def print_packet_details(packet: BitArray):
     print("DSCP + ECN:                   ", format(dscp_ecn, "08b"))
     print("Total Length:                 ", total_length, "bytes")
     print("Identification:               ", identification)
-    print("Flags:                        ", format(flags, "08b"))
-    print("Fragment Offset:              ", format(fragment_offset, "08b"))
+    print("Flags:                        ", format(flags, "03b"))
+    print("Fragment Offset:              ", fragment_offset)
     print("Time To Live (TTL):           ", ttl)
     print("Protocol:                     ", protocol)
     print("Header Checksum:              ", hex(header_checksum))
@@ -258,70 +258,6 @@ def print_packet_details(packet: BitArray):
     print("=====================================\n")
     print("Packet: ", packet,"\n")
 
-def print_header_details(ip_header, tcp_header):
-    """
-    Print detailed fields of an IPv4 header and a TCP header.
-    
-    Parameters:
-      ip_header: An instance of IPv4_Header.
-      tcp_header: An instance of TCP_Header.
-    """
-    print("=====================================")
-    print("           IPv4 HEADER")
-    print("=====================================")
-    print("IP Version:                   ", ip_header.IP_Version.uint)
-    # IHL is in 32-bit words; multiply by 4 for bytes.
-    print("Internet Header Length:       ", ip_header.Internet_Header_Length.uint * 4, "bytes")
-    print("Differentiated Services (DSCP):", ip_header.Differentiated_Services_Code_Point.uint)
-    print("Explicit Congestion Notif (ECN):", ip_header.Explicit_Congestion_Notification.uint)
-    print("Total Length:                 ", ip_header.Total_Length.uint, "bytes")
-    print("Identification:               ", ip_header.Identification.uint)
-    print("Flags:                        ", ip_header.Flags.bin)
-    print("Fragment Offset:              ", ip_header.Fragment_Offset.uint)
-    print("Time To Live (TTL):           ", ip_header.Time_To_Live.uint)
-    print("Protocol:                     ", ip_header.Protocol.uint)
-    print("Header Checksum:              ", hex(ip_header.Header_Checksum.uint))
-    
-    # Convert the 32-bit BitArrays to an IP string using socket.inet_ntoa()
-    src_ip = socket.inet_ntoa(ip_header.Source_Address.tobytes())
-    dst_ip = socket.inet_ntoa(ip_header.Destination_Address.tobytes())
-    print("Source Address:               ", src_ip)
-    print("Destination Address:          ", dst_ip)
-    
-    # Options may be empty; if not, print binary string.
-    if ip_header.Options.length > 0:
-        print("Options:                      ", ip_header.Options.bin)
-    else:
-        print("Options:                      (none)")
-    
-    print("\n=====================================")
-    print("              TCP HEADER")
-    print("=====================================")
-    print("Source Port:                  ", tcp_header.Source_Port.uint)
-    print("Destination Port:             ", tcp_header.Destination_Port.uint)
-    print("Sequence Number:              ", tcp_header.Sequence_Number.uint)
-    print("ACK Number:                   ", tcp_header.ACK_Number.uint)
-    # TCP Data_Offset is in 32-bit words; multiply by 4 for bytes.
-    print("Data Offset:                  ", tcp_header.Data_Offset.uint * 4, "bytes")
-    print("Reserved:                     ", tcp_header.Reserved.uint)
-    print("Flags:                        ", tcp_header.Flags.bin)
-    print("Window:                       ", tcp_header.Window.uint)
-    print("Checksum:                     ", hex(tcp_header.Checksum.uint))
-    print("Urgent Pointer:               ", tcp_header.Urgent_Pointer.uint)
-    
-    if tcp_header.Options.length > 0:
-        print("Options:                      ", tcp_header.Options.bin)
-    else:
-        print("Options:                      (none)")
-        
-    if tcp_header.Data.length > 0:
-        print("Data:                         ", tcp_header.Data.bin)
-    else:
-        print("Data:                         (none)")
-    
-    print("=====================================\n")
-    print("Packet: ", ip_header.to_bitarray() + tcp_header.to_bitarray_with_data(), "\n")
-
 # Converts an IPv4 string (e.g. '192.168.1.1') to a 32-bit integer (e.g. 3232235777).
 def ip_to_int(ip_str: str) -> int:
     import ipaddress
@@ -359,9 +295,12 @@ def save_packet_to_files(packet):
       - 'packet_bytes': Contains the raw bytes from the packet.
       - 'packet_bits' : Contains the full bit string representation.
     """
-    # Write the raw bytes to a text file
-    with open("packet_bytes", "w") as f_bytes:
-        f_bytes.write(packet.tobytes())
-
-
-    print("Saved packet bytes to 'packet_bytes' and packet bits to 'packet_bits'.")
+    try:
+        # Convert the raw bytes from the BitArray to a hex string.
+        hex_string = packet.tobytes().hex()
+        # Open file in text mode and write the hex string.
+        with open("packet_bytes.txt", "w") as f:
+            f.write(hex_string)
+        print("✅ Successfully wrote packet bytes as hex to 'packet_bytes.txt'.")
+    except Exception as e:
+        print(f"❌ Error writing packet bytes to text file: {e}")

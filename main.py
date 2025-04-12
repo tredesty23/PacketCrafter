@@ -142,14 +142,15 @@ def main():
                     raise Exception("Invalid input")
 
             elif arg == "-Source_Address":
+                print("AASDASDASDA")
                 if ipv4_regex.match(value):
-                    Source_Address = ip_to_int(value)
+                    ip_args["Source_Address"] = value
                 else:
                     raise Exception("Invalid input")
                 
             elif arg == "-Destination_Address":
                 if ipv4_regex.match(value):
-                    Destination_Address = ip_to_int(value)
+                    ip_args["Destination_Address"] = value
                 else:
                     raise Exception("Invalid input")
 
@@ -163,13 +164,13 @@ def main():
 
             elif arg == "-Source_Port":
                 if value.isdigit() and 0 <= int(value) <= 65535:
-                    Source_Port = int(value)
+                    tcp_args["Source_Port"] = int(value)
                 else:
                     raise Exception("Invalid input")
                 
             elif arg == "-Destination_Port":
                 if value.isdigit() and 0 <= int(value) <= 65535:
-                    Destination_Port = int(value)
+                    tcp_args["Destination_Port"] = int(value)
                 else:
                     raise Exception("Invalid input")
 
@@ -191,7 +192,7 @@ def main():
                 else:
                     raise Exception("Invalid input")
 
-            elif arg == ("-CWR", "-ECE", "-URG", "-ACK", "-PSH", "-RST", "-SYN", "-FIN"):
+            elif arg in ("-CWR", "-ECE", "-URG", "-ACK", "-PSH", "-RST", "-SYN", "-FIN"):
                 if value in ("0", "1"):
                     tcp_args[arg.strip("-")] = int(value)
                 else:
@@ -230,25 +231,23 @@ def main():
         print(f"Error: {e}")
         exit(1)
 
-    
-
     # Create a raw receiving socket for inbound TCP packets
     sock_recv = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-    sock_recv.bind(("0.0.0.0", Source_Port))  # Bind to listen on all interfaces
+    # Used 0 as second argument because bind needs an integer there, but OS ignores the value
+    # As we are dealing with raw sockets
+    sock_recv.bind(("0.0.0.0", 0))  # Bind to listen on all interfaces
 
-    # Get actual source details from the bound socket.
-    # First, get a preliminary source port from sock_recv.
-    Source_Port = sock_recv.getsockname()[1]
     # Then use a temporary UDP socket to get the external IP address.
     temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     temp_sock.connect(('8.8.8.8', 80))
     Source_Address = temp_sock.getsockname()[0]
+    Destination_Address = temp_sock.getsockname()[0]
     temp_sock.close()
 
     # Create the TCP_Header object
     tcp_header = TCP_Header(
-                            Source_Port     = Source_Port,
-                            Destination_Port= Destination_Port,
+                            Source_Port     = tcp_args.get("Source_Port", Source_Port),
+                            Destination_Port= tcp_args.get("Destination_Port", Destination_Port),
                             Sequence_Number = tcp_args.get("Sequence_Number", None),
                             ACK_Number      = tcp_args.get("ACK_Number", None),
                             Data_Offset     = tcp_args.get("Data_Offset", None),
@@ -275,19 +274,23 @@ def main():
                             Time_To_Live                       = ip_args.get("Time_To_Live", None),
                             Protocol                           = ip_args.get("Protocol", None),
                             Header_Checksum                    = ip_args.get("Header_Checksum", None),
-                            Source_Address                     = Source_Address,
-                            Destination_Address                = Destination_Address,
+                            Source_Address                     = ip_args.get("Source_Address", Source_Address),
+                            Destination_Address                = ip_args.get("Source_Address", Destination_Address),
                             Options                            = ip_args.get("IP_Header_Options", None),
                         )
     # Create raw socket for sending
-    sock_send = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+    sock_send = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
     sock_send.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
 
     # Prepare headers
     ipv4_header.update_total_length(tcp_header.TCP_Header_Length)
 
-    tcp_header.compute_checksum(Destination_Address = Destination_Address, Source_Address = Source_Address)
+    tcp_header.compute_checksum(
+        Destination_Address = Destination_Address,
+        Source_Address = Source_Address
+    )
+    
     ipv4_header.compute_checksum()
     
     packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
@@ -300,7 +303,7 @@ def main():
             
             save_packet_to_files(packet)
 
-            sent_bytes = sock_send.sendto(packet.tobytes(), (Destination_Address, 1000))
+            sent_bytes = sock_send.sendto(packet.tobytes(), (Destination_Address, 0))
 
             if sent_bytes == 0:
                 raise RuntimeError("❌ Packet send returned 0 bytes (nothing sent)")

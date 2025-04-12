@@ -54,29 +54,23 @@ class TCP_Header:
         self.Data = BitArray(0)
 
         # Set fields with user configuration
-        if Source_Port:
+        if Source_Port is not None:
             self.Source_Port = BitArray(uint = Source_Port, length = 16)
 
-        if Destination_Port:
+        if Destination_Port is not None:
             self.Destination_Port = BitArray(uint = Destination_Port, length = 16)
 
         # Default 0
-        if Sequence_Number is None:
-            if SYN is None or SYN == 0:
-                self.Sequence_Number = BitArray(uint = 0, length = 32)
-            else:
-                rand_seq = random.getrandbits(32)
-                self.Sequence_Number = BitArray(uint = rand_seq, length = 32)
-        else:
+        if Sequence_Number is not None:
             self.Sequence_Number = BitArray(uint = Sequence_Number, length = 32)
 
-        if ACK_Number:
+        if ACK_Number is not None:
             self.ACK_Number = BitArray(uint=ACK_Number, length=32)
 
-        if Data_Offset:
+        if Data_Offset is not None:
             self.Data_Offset = BitArray(uint = Data_Offset, length=4)
         
-        if CWR or ECE or URG or ACK or PSH or RST or SYN or FIN:
+        if (CWR or ECE or URG or ACK or PSH or RST or SYN or FIN) is not None:
             # Default flags for TCP header are 0
             def flag_bit(val):
                 return BitArray(uint=(1 if val else 0), length=1)
@@ -90,24 +84,29 @@ class TCP_Header:
                 + flag_bit(SYN)
                 + flag_bit(FIN)
             )
+            if SYN == 1:
+                rand_seq = random.getrandbits(32)
+                self.Sequence_Number = BitArray(uint = rand_seq, length = 32)
+        else:
+            raise Exception("No flag is set for TCP header")
 
-        if Window:
+        if Window is not None:
             self.Window = BitArray(uint = Window, length = 16)
 
-        if Checksum:
+        if Checksum is not None:
             self.Checksum = BitArray(uint = Checksum, length = 16)
 
-        if Urgent_Pointer:
+        if Urgent_Pointer is not None:
             self.Urgent_Pointer = BitArray(uint = Urgent_Pointer, length = 16)
 
-        if Options:
+        if Options is not None:
             bit_length = Options.bit_length()
             if bit_length % 32 != 0:
                 bit_length = ((bit_length // 32) + 1) * 32
             self.Options = BitArray(uint = Options, length = bit_length)
             self.Data_Offset = BitArray(uint = (5 + (bit_length // 32)), length = 4)
         
-        if Data:
+        if Data is not None:
             self.Data = BitArray(uint = Data, length = Data.bit_length())
 
         # This will be used to store the length of the tcp header + data
@@ -116,20 +115,16 @@ class TCP_Header:
         
     def compute_checksum(self, Destination_Address, Source_Address):
 
-        src_addr = BitArray(uint = ip_to_int(Source_Address), length = 32)
+        psh_ipv4_header = Pseudo_IPv4_Header(
+            Source_Address = BitArray(uint = ip_to_int(Source_Address), length = 32),
+            Destination_Address= BitArray(uint = ip_to_int(Destination_Address), length=32),
+            Protocol = BitArray(uint = 6, length = 8),
+            TCP_Length = BitArray(uint = self.TCP_Header_Length, length = 16)
+        )
 
-        dst_addr = BitArray(uint = ip_to_int(Destination_Address), length=32)
-
-        psh_ipv4_header = Pseudo_IPv4_Header(Source_Address=src_addr,
-                                            Destination_Address=dst_addr,
-                                            Reserved = BitArray(uint = 0, length = 4),
-                                            Protocol = BitArray(uint = 6, length = 8),
-                                            TCP_Length = BitArray(uint = (self.Data_Offset.uint * 4 + len(self.Data)), length = 16)
-                                        )
         buffer = psh_ipv4_header.to_bitarray() + self.to_bitarray_with_data()
         checksum_val = ones_complement_sum_16bit(buffer)
         final_checksum_val = (~checksum_val) & 0xFFFF
-        
         self.Checksum = BitArray(uint=final_checksum_val, length = 16)
 
     def to_bitarray(self):
@@ -154,17 +149,18 @@ class TCP_Header:
 
 # for TCP Header checksum computation
 class Pseudo_IPv4_Header:
-    def __init__(self, Source_Address, Destination_Address, Reserved, Protocol, TCP_Length):
-        self.Source_Address = Source_Address
-        self.Destination_Address = Destination_Address
-        self.Reserved = Reserved
-        self.Protocol = Protocol
-        self.TCP_Length = TCP_Length
+    def __init__(self, Source_Address : BitArray, Destination_Address : BitArray, Protocol : BitArray, TCP_Length : BitArray):
+        self.Source_Address = Source_Address            # 32 bits
+        self.Destination_Address = Destination_Address  # 32 bits
+        self.Reserved = BitArray(uint=0, length=8)        # 8 bits of zeros
+        self.Protocol = Protocol                          # 8 bits (should be 6 for TCP)
+        self.TCP_Length = TCP_Length                      # 16 bits
+    
     def to_bitarray(self):
         return (
-                self.Source_Address
-                + self.Destination_Address
-                + self.Reserved
-                + self.Protocol
-                + self.TCP_Length
-            )
+            self.Source_Address +
+            self.Destination_Address +
+            self.Reserved +
+            self.Protocol +
+            self.TCP_Length
+        )
