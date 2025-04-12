@@ -37,6 +37,8 @@ While some minor functions (like printing and basic checks) were generated with 
 - Currently, sending packets using the `sendto()` function may fail.
   - The OS considers the arguments invalid.
   - You can find this behavior in the [`main.py`](./main.py) file, near the end, after the *sanity check*.
+  ```bash
+  sent_bytes = sock_send.sendto(packet.tobytes(), (Destination_Address, 1000))
 
 ---
 
