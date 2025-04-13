@@ -34,11 +34,15 @@ While some minor functions (like printing and basic checks) were generated with 
 
 ## ⚠️ Known Issues
 
-- Currently, sending packets using the `sendto()` function may fail.
-  - The OS considers the arguments invalid.
-  - You can find this behavior in the [`main.py`](./main.py) file, near the end, after the *sanity check*.
+- ~~Currently, sending packets using the `sendto()` function may fail.~~
+  ~~- The OS considers the arguments invalid.~~
+  ~~- You can find this behavior in the [`main.py`](./main.py) file, near the end, after the *sanity check*.~~
   ```bash
   sent_bytes = sock_send.sendto(packet.tobytes(), (Destination_Address, 1000))
+
+⚠️ **Note:** I just found out why this was happening, i use macos, and raw sockets are highly restricted on macos(and the majority of operating systems, a thing i didn't know when i started this project, it's i good thing i learned that now) and so I have to go a layer deeper, to the Data-Link layer! So I have to construct the ethernet header myself!
+
+So i looked more into how scapy and nmap bypass these restrictions, and that's it! Finally I can maybe make this program work:)
 
 ---
 
