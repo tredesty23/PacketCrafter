@@ -8,7 +8,7 @@ import struct
 import socket
 from bitstring import BitArray
 
-def sanity_check_packet(packet: BitArray) -> bool:
+def tcp_sanity_check_packet(packet: BitArray) -> bool:
     """
     Perform a detailed sanity check on a packet (as a BitArray) and verify that:
       - The packet is long enough to contain an IPv4 header.

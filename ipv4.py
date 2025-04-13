@@ -21,17 +21,18 @@ Concatenate all standard fields in typical IPv4 header order:
 """
 
 class IPv4_Header:
-    def __init__(self,
-                Differentiated_Services_Code_Point,
-                Explicit_Congestion_Notification,
-                Identification,
-                Time_To_Live,
-                Protocol,
-                Header_Checksum,
-                Source_Address,
-                Destination_Address,
-                Options
-                ):
+    def __init__(
+        self,
+        Differentiated_Services_Code_Point,
+        Explicit_Congestion_Notification,
+        Identification,
+        Time_To_Live,
+        Protocol,
+        Header_Checksum,
+        Source_Address,
+        Destination_Address,
+        Options
+    ):
 
         self.IP_Version = BitArray(uint = 4, length = 4)
         self.Internet_Header_Length = BitArray(uint = 5, length = 4)

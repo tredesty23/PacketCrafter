@@ -20,25 +20,27 @@ Concatenate all standard fields in typical TCP header order:
 """
 
 class TCP_Header:
-    def __init__(self,
-                Source_Port,
-                Destination_Port,
-                Sequence_Number,
-                ACK_Number,
-                Data_Offset,
-                CWR,
-                ECE,
-                URG,
-                ACK,
-                PSH,
-                RST,
-                SYN,
-                FIN,
-                Window,
-                Checksum,
-                Urgent_Pointer,
-                Options,
-                Data):
+    def __init__(
+        self,
+        Source_Port,
+        Destination_Port,
+        Sequence_Number,
+        ACK_Number,
+        Data_Offset,
+        CWR,
+        ECE,
+        URG,
+        ACK,
+        PSH,
+        RST,
+        SYN,
+        FIN,
+        Window,
+        Checksum,
+        Urgent_Pointer,
+        Options,
+        Data
+    ):
         
         self.Source_Port = BitArray(uint = Default_Source_Port, length = 16)
         self.Destination_Port = BitArray(uint = Default_Destination_Port, length = 16)

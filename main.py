@@ -6,7 +6,8 @@ from utils import ip_to_int
 import time
 from ipv4 import IPv4_Header
 from tcp import TCP_Header
-from utils import sanity_check_packet, print_packet_details, save_packet_to_files
+from ethernet import Ethernet_Frame
+from utils import tcp_sanity_check_packet, print_packet_details, save_packet_to_files
 from config import Default_Destination_Address, Default_Source_Address, Default_Source_Port, Default_Destination_Port, Default_Port_Range
 import traceback
 
@@ -278,12 +279,10 @@ def main():
                             Destination_Address                = ip_args.get("Source_Address", Destination_Address),
                             Options                            = ip_args.get("IP_Header_Options", None),
                         )
-    # Create raw socket for sending
-    sock_send = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-    sock_send.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    
+    
 
-
-    # Prepare headers
+    # Finish ip and tcp headers
     ipv4_header.update_total_length(tcp_header.TCP_Header_Length)
 
     tcp_header.compute_checksum(
@@ -293,11 +292,18 @@ def main():
     
     ipv4_header.compute_checksum()
     
-    packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
+    # Prepare payload packet
+    tcp_packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
+
+    # Create the Ethernet frame/header (enveloping proccess: network layer to data link layer)
+    eth_frame = Ethernet_Frame(Payload = tcp_packet)
+
+
+    # TODO restructure everything below for data link sending
 
     # Send the packet
     try:
-        if sanity_check_packet(packet):
+        if tcp_sanity_check_packet(packet):
             
             print_packet_details(packet)
             
