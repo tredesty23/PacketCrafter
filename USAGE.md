@@ -82,21 +82,23 @@ python3 main.py -Source_Address 192.168.1.10 -Destination_Address 192.168.1.1 -S
 - The script injects the packet at the **data link layer** using the **default MAC address**.
 - You should ensure you have appropriate permissions (e.g., run with `sudo` on Unix systems).
 
+(should work without sudo currently also)
+
 ---
 
 ## Example
 
+# Run tcpdump in another terminal window with a filter to see the packet
+*You can also use wireshark or any other packet capturing software*
+
 ```bash
-python3 main.py \
-    -Source_Address 192.168.1.100 \
-    -Destination_Address 192.168.1.1 \
-    -Source_Port 12345 \
-    -Destination_Port 80 \
-    -Sequence_Number 100 \
-    -ACK_Number 0 \
-    -SYN 1 \
-    -ACK 0 \
-    -TCP_Data "GET / HTTP/1.1"
+tcpdump -i en0 ether host aa:bb:cc:dd:ee:ff # put your own mac address
+```
+
+**Note** You can run main.py once also to and there you can see your mac address
+
+```bash
+python3 main.py -SYN 1 -ACK 1
 ```
 
 ---
