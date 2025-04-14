@@ -1,5 +1,7 @@
-from config import Default_Source_MAC_Address, Default_Destination_MAC_Address, Default_Ether_Type, Default_Payload
+from config import Default_Source_MAC_Address, Default_Destination_MAC_Address, Default_Ether_Type, Default_TCP_Payload
 from bitstring import BitArray
+from utils import mac_to_int
+
 """
 Ethernet_Frame class
 
@@ -25,12 +27,15 @@ class Ethernet_Frame:
         Source_MAC_Address = Default_Source_MAC_Address,
         Destination_MAC_Address = Default_Destination_MAC_Address,
         EtherType = Default_Ether_Type,
-        Payload = Default_Payload,
+        Payload = Default_TCP_Payload
     ):
-        self.Destination_MAC_Address = BitArray(uint = Destination_MAC_Address, length = 6)
-        self.Source_MAC_Address = BitArray(uint = Source_MAC_Address, length = 6)
-        self.EtherType = BitArray(uint = EtherType, length = 2)
-        self.Payload = BitArray(uint = Payload, length = len(Payload))
+        self.Destination_MAC_Address = BitArray(uint = mac_to_int(Destination_MAC_Address), length = 48)
+        self.Source_MAC_Address = BitArray(uint = mac_to_int(Source_MAC_Address), length = 48)
+        self.EtherType = BitArray(uint = EtherType, length = 16)
+        if Payload is None:
+            raise Exception("No payload configured for ethernet frame construction")
+        else:
+            self.Payload = Payload
 
-    def to_bitarray(self, asd):
+    def to_bitarray(self):
         return self.Destination_MAC_Address + self.Source_MAC_Address + self.EtherType + self.Payload

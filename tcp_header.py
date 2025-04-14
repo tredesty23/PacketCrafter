@@ -1,6 +1,6 @@
 from config import Default_Source_Port, Default_Destination_Port
-from utils import ip_to_int, ones_complement_sum_16bit
-from bitstring import BitArray, Bits
+from utils import ipv4_to_int, ones_complement_sum_16bit
+from bitstring import BitArray
 import random
 
 """
@@ -22,24 +22,24 @@ Concatenate all standard fields in typical TCP header order:
 class TCP_Header:
     def __init__(
         self,
-        Source_Port,
-        Destination_Port,
-        Sequence_Number,
-        ACK_Number,
-        Data_Offset,
-        CWR,
-        ECE,
-        URG,
-        ACK,
-        PSH,
-        RST,
-        SYN,
-        FIN,
-        Window,
-        Checksum,
-        Urgent_Pointer,
-        Options,
-        Data
+        Source_Port = None,
+        Destination_Port = None,
+        Sequence_Number = None,
+        ACK_Number = None,
+        Data_Offset = None,
+        CWR = None,
+        ECE = None,
+        URG = None,
+        ACK = None,
+        PSH = None,
+        RST = None,
+        SYN = None,
+        FIN = None,
+        Window = None,
+        Checksum = None,
+        Urgent_Pointer = None,
+        Options = None,
+        Data = None
     ):
         
         self.Source_Port = BitArray(uint = Default_Source_Port, length = 16)
@@ -90,7 +90,7 @@ class TCP_Header:
                 rand_seq = random.getrandbits(32)
                 self.Sequence_Number = BitArray(uint = rand_seq, length = 32)
         else:
-            raise Exception("No flag is set for TCP header")
+            self.Flags = BitArray(uint = 2, length = 8)
 
         if Window is not None:
             self.Window = BitArray(uint = Window, length = 16)
@@ -118,8 +118,8 @@ class TCP_Header:
     def compute_checksum(self, Destination_Address, Source_Address):
 
         psh_ipv4_header = Pseudo_IPv4_Header(
-            Source_Address = BitArray(uint = ip_to_int(Source_Address), length = 32),
-            Destination_Address= BitArray(uint = ip_to_int(Destination_Address), length=32),
+            Source_Address = BitArray(uint = ipv4_to_int(Source_Address), length = 32),
+            Destination_Address= BitArray(uint = ipv4_to_int(Destination_Address), length=32),
             Protocol = BitArray(uint = 6, length = 8),
             TCP_Length = BitArray(uint = self.TCP_Header_Length, length = 16)
         )

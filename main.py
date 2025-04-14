@@ -2,14 +2,15 @@ import socket
 import sys
 import re
 from bitstring import Bits, BitArray
-from utils import ip_to_int
+from utils import ipv4_to_int, mac_to_int, int_to_mac
 import time
-from ipv4 import IPv4_Header
-from tcp import TCP_Header
-from ethernet import Ethernet_Frame
+from ipv4_header import IPv4_Header
+from tcp_header import TCP_Header
+from ethernet_frame import Ethernet_Frame
 from utils import tcp_sanity_check_packet, print_packet_details, save_packet_to_files
-from config import Default_Destination_Address, Default_Source_Address, Default_Source_Port, Default_Destination_Port, Default_Port_Range
+from config import Default_Destination_Address, Default_Source_Address, Default_Source_Port, Default_Destination_Port, Default_Port_Range, iface
 import traceback
+import pcapy
 
 # Regular expressions for IP
 ipv4_regex = re.compile(r'^((25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(25[0-5]|2[0-4]\d|[01]?\d?\d)$')
@@ -232,17 +233,12 @@ def main():
         print(f"Error: {e}")
         exit(1)
 
-    # Create a raw receiving socket for inbound TCP packets
-    sock_recv = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-    # Used 0 as second argument because bind needs an integer there, but OS ignores the value
-    # As we are dealing with raw sockets
-    sock_recv.bind(("0.0.0.0", 0))  # Bind to listen on all interfaces
 
     # Then use a temporary UDP socket to get the external IP address.
     temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     temp_sock.connect(('8.8.8.8', 80))
     Source_Address = temp_sock.getsockname()[0]
-    Destination_Address = temp_sock.getsockname()[0]
+    Destination_Address = Source_Address
     temp_sock.close()
 
     # Create the TCP_Header object
@@ -296,9 +292,29 @@ def main():
     tcp_packet = ipv4_header.to_bitarray() + tcp_header.to_bitarray_with_data()
 
     # Create the Ethernet frame/header (enveloping proccess: network layer to data link layer)
-    eth_frame = Ethernet_Frame(Payload = tcp_packet)
+
+    try:
+        if tcp_sanity_check_packet(tcp_packet):
+            eth_frame = Ethernet_Frame(Payload = tcp_packet)
+            # print_packet_details(tcp_packet)
+            
+            # save_packet_to_files(packet)
+
+            pcap = pcapy.open_live(iface, 65536, 1, 0)
 
 
+            pcap.sendpacket(eth_frame.to_bitarray().tobytes())
+
+            print(f"✅ Packet sent succesfully")
+            print("Source MAC address: ", int_to_mac(eth_frame.Source_MAC_Address.uint))
+            print("Destination MAC address: ", int_to_mac(eth_frame.Destination_MAC_Address.uint))
+            
+        else:
+            raise ValueError("❌ Packet sanity check failed")
+    except (OSError, RuntimeError, ValueError, Exception) as e:
+        traceback.print_exc()
+        print(f"❌ Failed to send packet: {e}")
+"""
     # TODO restructure everything below for data link sending
 
     # Send the packet
@@ -349,5 +365,5 @@ def main():
     print(f"Received {len(received_packets)} packets:")
     for i, pkt in enumerate(received_packets):
         print(f"Packet {i+1}: From {pkt['source_ip']}:{pkt['source_port']} - {pkt['length']} bytes")
-
+"""
 main()

@@ -258,11 +258,28 @@ def print_packet_details(packet: BitArray):
     print("=====================================\n")
     print("Packet: ", packet,"\n")
 
-# Converts an IPv4 string (e.g. '192.168.1.1') to a 32-bit integer (e.g. 3232235777).
-def ip_to_int(ip_str: str) -> int:
+# Conversion function between addresses and int
+def ipv4_to_int(ip_str: str) -> int:
     import ipaddress
-
     return int(ipaddress.ip_address(ip_str))
+
+def int_to_ipv4(value: int) -> str:
+    return socket.inet_ntoa(struct.pack("!I", value))
+
+def ipv6_to_int(ipv6: str) -> int:
+    return int(ipaddress.IPv6Address(ipv6))
+
+def int_to_ipv6(value: int) -> str:
+    return str(ipaddress.IPv6Address(value))
+
+def mac_to_int(mac: str) -> int:
+    # Remove colons, dashes, dots, etc.
+    mac_clean = mac.replace(":", "").replace("-", "").replace(".", "")
+    return int(mac_clean, 16)
+
+def int_to_mac(value: int) -> str:
+    hex_str = f"{value:012x}"  # 12 hex digits (48 bits)
+    return ":".join(hex_str[i:i+2] for i in range(0, 12, 2))
 
 # Used for checksum computation
 def ones_complement_sum_16bit(bit_arr):

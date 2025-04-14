@@ -1,6 +1,5 @@
-
 from config import Default_Destination_Address, Default_Source_Address
-from utils import ip_to_int, ones_complement_sum_16bit
+from utils import ipv4_to_int, ones_complement_sum_16bit
 from bitstring import BitArray, Bits
 import random
 """
@@ -23,15 +22,15 @@ Concatenate all standard fields in typical IPv4 header order:
 class IPv4_Header:
     def __init__(
         self,
-        Differentiated_Services_Code_Point,
-        Explicit_Congestion_Notification,
-        Identification,
-        Time_To_Live,
-        Protocol,
-        Header_Checksum,
-        Source_Address,
-        Destination_Address,
-        Options
+        Differentiated_Services_Code_Point = None,
+        Explicit_Congestion_Notification = None,
+        Identification = None,
+        Time_To_Live = None,
+        Protocol = None,
+        Header_Checksum = None,
+        Source_Address = None,
+        Destination_Address = None,
+        Options = None
     ):
 
         self.IP_Version = BitArray(uint = 4, length = 4)
@@ -45,8 +44,8 @@ class IPv4_Header:
         self.Time_To_Live = BitArray(uint = 64, length = 8)
         self.Protocol = BitArray(uint = 6, length = 8)
         self.Header_Checksum = BitArray(uint = 0, length = 16)
-        self.Source_Address = BitArray(uint = ip_to_int(Default_Source_Address), length = 32)
-        self.Destination_Address = BitArray(uint = ip_to_int(Default_Destination_Address), length = 32)
+        self.Source_Address = BitArray(uint = ipv4_to_int(Default_Source_Address), length = 32)
+        self.Destination_Address = BitArray(uint = ipv4_to_int(Default_Destination_Address), length = 32)
         self.Options = BitArray(0)
 
         # Set fields with user configuration
@@ -69,10 +68,10 @@ class IPv4_Header:
             self.Header_Checksum = BitArray(uint = Header_Checksum, length = 16)
 
         if Source_Address is not None:
-            self.Source_Address = BitArray(uint = ip_to_int(Source_Address), length = 32)
+            self.Source_Address = BitArray(uint = ipv4_to_int(Source_Address), length = 32)
 
         if Destination_Address is not None:
-            self.Destination_Address = BitArray(uint = ip_to_int(Destination_Address), length = 32)
+            self.Destination_Address = BitArray(uint = ipv4_to_int(Destination_Address), length = 32)
 
         if Options is not None:
             bit_length = Options.bit_length()
