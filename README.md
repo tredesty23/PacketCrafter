@@ -1,4 +1,4 @@
-# Packet Crafter / Sender / Analyzer
+  # Packet Crafter / Sender / Analyzer
 
 > Inspired by the [Scapy](https://scapy.net/) module
 
@@ -48,18 +48,7 @@ So i looked more into how scapy and nmap bypass these restrictions, and that's i
 
 ## 🛠️ How to Use ()
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/username/packet-crafter.git
-   cd packet-crafter
-
-2. Run the script(no current implementations are made, firstly the issues mentioned have to be fixed):
-   
-   So an example usage(it wouldn't do anything with the flag yet, would just try to send a packet to itself)
-
-   ⚠️ It requires sudo privileges to send raw packets.
-   ```bash
-   sudo python3 main.py -sS
+Go to the USAGE.md file for info
 
 ---
 
