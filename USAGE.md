@@ -105,4 +105,4 @@ python3 main.py -SYN 1 -ACK 1
 
 ## License
 
-MIT or your preferred license.
+Open source project
